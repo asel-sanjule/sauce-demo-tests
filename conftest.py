@@ -1,14 +1,18 @@
 import pytest
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
 
 BASE_URL = "https://sauce-demo.myshopify.com"
 
 
 def build_driver() -> webdriver.Chrome:
-    """Builds and returns a configured Chrome WebDriver instance."""
+    """
+    Builds and returns a configured Chrome WebDriver instance.
+
+    Selenium 4.6+ ships with selenium-manager, a built-in driver manager that
+    automatically locates or downloads the correct ChromeDriver binary.
+    No third-party webdriver-manager package needed.
+    """
     options = Options()
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
@@ -16,13 +20,11 @@ def build_driver() -> webdriver.Chrome:
     options.add_argument("--window-size=1920,1080")
     options.add_argument("--disable-extensions")
 
-    return webdriver.Chrome(
-        service=Service(ChromeDriverManager().install()),
-        options=options,
-    )
+    # Selenium Manager resolves ChromeDriver automatically — no Service() path needed.
+    return webdriver.Chrome(options=options)
 
 
-# ── Core driver fixture ─────────────────────────────────────────────────────
+# ── Core driver fixture ──────────────────────────────────────────────────────
 # scope="function" means a fresh browser is spun up for every test.
 # This is the same as Playwright's default behaviour — no shared state between tests.
 
@@ -35,7 +37,7 @@ def driver():
     _driver.quit()
 
 
-# ── Pre-navigated convenience fixtures ─────────────────────────────────────
+# ── Pre-navigated convenience fixtures ──────────────────────────────────────
 # These are exactly like Playwright's fixtures that accept a `page` argument
 # and call page.goto() before the test body runs.
 
