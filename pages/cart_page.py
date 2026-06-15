@@ -6,11 +6,14 @@ class CartPage(BasePage):
     """Page object for https://sauce-demo.myshopify.com/cart"""
 
     # ── Locators ──────────────────────────────────────────────────────────────
+    # Confirmed from live page:
+    # Empty cart message text: "It appears that your cart is currently empty!"
+    # Continue Shopping link:  "Continue Shopping" → /collections/all
 
     PAGE_HEADING       = (By.CSS_SELECTOR, "h1")
-    EMPTY_CART_MESSAGE = (By.CSS_SELECTOR, "#cart-form p, .cart__empty-text, p.empty")
+    EMPTY_CART_MESSAGE = (By.XPATH, "//*[contains(text(), 'currently empty')]")
     CONTINUE_SHOPPING  = (By.LINK_TEXT, "Continue Shopping")
-    CART_ITEMS         = (By.CSS_SELECTOR, ".cart__item, .cart-item")
+    CART_ITEMS         = (By.CSS_SELECTOR, ".cart__item, .cart-item, tr.cart-item")
     CHECKOUT_BUTTON    = (By.CSS_SELECTOR, "input[name='checkout'], button[name='checkout']")
 
     # ── Actions ───────────────────────────────────────────────────────────────
