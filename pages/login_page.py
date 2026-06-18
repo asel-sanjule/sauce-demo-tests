@@ -36,6 +36,7 @@ class LoginPage(BasePage):
         self.enter_email(email)
         self.enter_password(password)
         self.click_submit()
+		self.wait_for_page_load()   # new helper added to BasePage
 
     def is_email_field_present(self) -> bool:
         return self.is_visible(self.EMAIL_FIELD)
@@ -55,8 +56,8 @@ class LoginPage(BasePage):
         the .errors container in the DOM before errors are added to it.
         """
         try:
-            self.wait.until(EC.presence_of_element_located(self.ERROR_MESSAGE))
-            return True
+            element = self.wait.until(EC.visibility_of_element_located(self.ERROR_MESSAGE))
+			return bool(element.text.strip())
         except Exception:
             return False
 

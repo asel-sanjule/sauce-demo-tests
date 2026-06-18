@@ -32,7 +32,9 @@ def build_driver() -> webdriver.Chrome:
 def driver():
     """Provides a clean browser session for each test. Quits after the test completes."""
     _driver = build_driver()
-    _driver.implicitly_wait(10)
+    # _driver.implicitly_wait(10)
+	# removed, with explanation comment
+	# All waiting is handled explicitly in BasePage via WebDriverWait.
     yield _driver
     _driver.quit()
 
