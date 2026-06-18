@@ -27,10 +27,8 @@ class LoginPage(BasePage):
         "form[action*='/account/login'] button[type='submit']"
     )
 
-    # Shopify's bot-detection CAPTCHA rotates between challenge types:
-    # "drag the icon to the place where it fits", "click the shape that is
-    # not like the others", etc. Detecting by challenge text breaks on every
-    # rotation. The Skip button is present in every variant — use that instead.
+    # The Skip button text is stable across all CAPTCHA challenge variants
+    # ("drag the icon", "click the shape", "find all vehicles", etc.)
     CAPTCHA_SKIP = (By.XPATH, "//button[normalize-space(text())='Skip']")
 
     def open(self):
@@ -47,20 +45,37 @@ class LoginPage(BasePage):
 
     def _dismiss_captcha_if_present(self):
         """
-        Shopify shows a rotating CAPTCHA challenge when it suspects a bot.
-        The challenge text changes between runs so we detect by the Skip
-        button, which is present in every variant. Clicking Skip lets the
-        original form result (the login error) load normally.
-        Uses a 3s timeout so it adds no delay when no CAPTCHA is present.
+        Shopify's bot-detection CAPTCHA widget is rendered inside an iframe.
+        Searching for the Skip button in the main document context never finds
+        it — we must switch into each iframe in turn until we locate and click it.
+
+        Flow:
+          1. Collect all iframes currently in the main document.
+          2. For each iframe, switch context and look for the Skip button (1s budget).
+          3. If found — click, switch back to default content, wait for page load.
+          4. If not found — switch back and try the next iframe.
+          5. Always restore default content whether we succeed or not.
         """
         try:
-            skip = WebDriverWait(self.driver, 3).until(
-                EC.element_to_be_clickable(self.CAPTCHA_SKIP)
+            iframes = WebDriverWait(self.driver, 3).until(
+                EC.presence_of_all_elements_located((By.TAG_NAME, "iframe"))
             )
-            skip.click()
-            self.wait_for_page_load()
         except Exception:
-            pass  # No CAPTCHA present — continue normally
+            return  # No iframes — no CAPTCHA present
+
+        for iframe in iframes:
+            try:
+                self.driver.switch_to.frame(iframe)
+                skip = WebDriverWait(self.driver, 1).until(
+                    EC.element_to_be_clickable(self.CAPTCHA_SKIP)
+                )
+                skip.click()
+                self.driver.switch_to.default_content()
+                self.wait_for_page_load()
+                return  # Done — CAPTCHA dismissed
+            except Exception:
+                self.driver.switch_to.default_content()
+                continue  # Try the next iframe
 
     def attempt_login(self, email: str, password: str):
         self.enter_email(email)
