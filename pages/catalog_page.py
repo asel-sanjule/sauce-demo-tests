@@ -5,16 +5,8 @@ from pages.base_page import BasePage
 class CatalogPage(BasePage):
     """Page object for https://sauce-demo.myshopify.com/collections/all"""
 
-    # ── Locators ──────────────────────────────────────────────────────────────
-    # All product links follow the pattern /collections/all/products/<slug>
-    # Using href-based XPath is far more reliable than CSS class names
-    # which vary by Shopify theme version.
-
-    PAGE_HEADING    = (By.CSS_SELECTOR, "h1")
     PRODUCT_LINKS   = (By.XPATH, "//a[contains(@href, '/collections/all/products/')]")
     SOLD_OUT_BADGES = (By.XPATH, "//*[contains(text(), 'Sold Out')]")
-
-    # ── Actions ───────────────────────────────────────────────────────────────
 
     def open(self):
         return super().open("/collections/all")
@@ -24,24 +16,25 @@ class CatalogPage(BasePage):
 
     def get_product_titles(self) -> list[str]:
         """
-        Returns visible text from each product link.
-        Shopify product links contain both image alt text and title text,
-        so the raw .text may look like 'Grey jacket Grey jacket £55.00'.
-        The is_product_listed() check handles this via substring matching.
+        Shopify themes often place the product name in a visually-hidden span
+        inside the <a> tag. Selenium's .text skips hidden text, so we use
+        get_attribute('textContent') which reads all DOM text regardless of
+        CSS visibility — equivalent to JavaScript's element.textContent.
         """
-        return [el.text.strip() for el in self.find_all(self.PRODUCT_LINKS) if el.text.strip()]
+        titles = []
+        for el in self.find_all(self.PRODUCT_LINKS):
+            text = el.get_attribute("textContent").strip()
+            if text:
+                titles.append(text)
+        return titles
 
     def get_sold_out_items(self) -> list:
         return self.find_all(self.SOLD_OUT_BADGES)
 
     def click_product_by_text(self, product_name: str):
-        """Click a product by partial name match."""
         self.click((By.PARTIAL_LINK_TEXT, product_name))
 
-    # ── State checks ──────────────────────────────────────────────────────────
-
     def product_count(self) -> int:
-        """Count distinct product links by unique href."""
         elements = self.get_all_products()
         unique_hrefs = set(el.get_attribute("href") for el in elements)
         return len(unique_hrefs)
