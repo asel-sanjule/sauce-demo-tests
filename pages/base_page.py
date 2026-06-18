@@ -56,6 +56,20 @@ class BasePage:
         element.clear()
         element.send_keys(text)
 
+    def wait_for_page_load(self, timeout: int = 15):
+        """
+        Blocks until the browser reports document.readyState == 'complete'.
+        Call this after any action that triggers a full page navigation (form
+        submit, link click) so subsequent assertions don't race the reload.
+        Equivalent to Playwright's page.wait_for_load_state('load').
+        """
+        try:
+            WebDriverWait(self.driver, timeout).until(
+                lambda d: d.execute_script("return document.readyState") == "complete"
+            )
+        except Exception:
+            pass  # Best-effort — don't crash the test if the hook times out
+
     # ── Assertions helpers ───────────────────────────────────────────────────
     # Playwright has expect(locator).toBeVisible() — here we use is_displayed().
     # These helpers keep test files clean and readable.

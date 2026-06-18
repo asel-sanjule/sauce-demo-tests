@@ -32,9 +32,12 @@ def build_driver() -> webdriver.Chrome:
 def driver():
     """Provides a clean browser session for each test. Quits after the test completes."""
     _driver = build_driver()
-    # _driver.implicitly_wait(10)
-	# removed, with explanation comment
-	# All waiting is handled explicitly in BasePage via WebDriverWait.
+    # NOTE: implicitly_wait is intentionally NOT set here.
+    # Mixing implicit + explicit (WebDriverWait) waits is a known anti-pattern:
+    # each internal find_element() call blocks for the full implicit timeout before
+    # raising NoSuchElementException, which exhausts the WebDriverWait budget on
+    # the very first poll — leaving zero time for retries.
+    # All waiting is handled explicitly in BasePage via WebDriverWait.
     yield _driver
     _driver.quit()
 
