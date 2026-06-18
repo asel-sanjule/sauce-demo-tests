@@ -1,5 +1,6 @@
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 from pages.base_page import BasePage
 
 
@@ -11,22 +12,25 @@ class LoginPage(BasePage):
     FORGOT_PWD_LINK = (By.LINK_TEXT, "Forgot your password?")
     SIGNUP_LINK     = (By.CSS_SELECTOR, "a[href='/account/register']")
 
-    # Covers error containers across common Shopify theme variants.
-    # ul.errors        — default_errors filter output (Timber, Debut, Minimal, Vintage)
-    # .form__message   — Dawn / OS 2.0 themes
-    # .notice--error   — some custom themes
+    # ul.errors     — default_errors filter output (Timber, Debut, Minimal, Vintage)
+    # .form__message — Dawn / OS 2.0 themes
+    # .notice--error — some custom themes
     ERROR_MESSAGE = (By.CSS_SELECTOR,
         "ul.errors, "
         ".form__message, "
         ".notice--error"
     )
 
-    # Uses action*= (contains) to handle Shopify appending ?return_url=... to the
-    # action attribute at runtime, which breaks an exact [action='/account/login'] match.
+    # action*= (contains) handles Shopify appending ?return_url=... at runtime.
     SUBMIT_BUTTON = (By.CSS_SELECTOR,
         "form[action*='/account/login'] input[type='submit'], "
         "form[action*='/account/login'] button[type='submit']"
     )
+
+    # Shopify's bot-detection CAPTCHA. The puzzle has a "Skip" button that
+    # bypasses the challenge and lets the form result through.
+    CAPTCHA_OVERLAY = (By.XPATH, "//*[contains(text(), 'drag the icon')]")
+    CAPTCHA_SKIP    = (By.XPATH, "//button[normalize-space(text())='Skip']")
 
     def open(self):
         return super().open("/account/login")
@@ -40,13 +44,32 @@ class LoginPage(BasePage):
     def click_submit(self):
         self.click(self.SUBMIT_BUTTON)
 
+    def _dismiss_captcha_if_present(self):
+        """
+        Shopify shows a drag-and-drop CAPTCHA when it suspects a bot.
+        The challenge includes a "Skip" button — clicking it lets the
+        original form request proceed so the login error is rendered normally.
+        Uses a short timeout (3s) so it doesn't slow down the happy path.
+        """
+        try:
+            WebDriverWait(self.driver, 3).until(
+                EC.presence_of_element_located(self.CAPTCHA_OVERLAY)
+            )
+            skip = WebDriverWait(self.driver, 3).until(
+                EC.element_to_be_clickable(self.CAPTCHA_SKIP)
+            )
+            skip.click()
+            self.wait_for_page_load()
+        except Exception:
+            pass  # No CAPTCHA present — continue normally
+
     def attempt_login(self, email: str, password: str):
         self.enter_email(email)
         self.enter_password(password)
         self.click_submit()
-        # Wait for the POST -> redirect -> page-load cycle to finish before
-        # any subsequent assertion polls the DOM.
         self.wait_for_page_load()
+        # Dismiss bot-detection CAPTCHA if Shopify triggered it.
+        self._dismiss_captcha_if_present()
 
     def is_email_field_present(self) -> bool:
         return self.is_visible(self.EMAIL_FIELD)
@@ -64,17 +87,10 @@ class LoginPage(BasePage):
         """
         Returns True when an error message is present after a failed login.
 
-        Two strategies are attempted in order:
-
-        1. CSS selector — waits up to 10s for a visible, non-empty element
-           matching any of the known Shopify error-container classes.
-
-        2. JavaScript innerText fallback — scans the full page text for
-           Shopify's known login error phrases. This is independent of CSS
-           class names so it covers theme customisations, translated copy,
-           or any structural change that breaks the element-based check.
+        Strategy 1: CSS selector — waits for a visible, non-empty element.
+        Strategy 2: JS innerText fallback — scans for Shopify's known error
+        phrases in case the theme uses different class names.
         """
-        # Strategy 1: element-based
         try:
             element = self.wait.until(EC.visibility_of_element_located(self.ERROR_MESSAGE))
             if element.text.strip():
@@ -82,7 +98,6 @@ class LoginPage(BasePage):
         except Exception:
             pass
 
-        # Strategy 2: full-page text scan
         try:
             body_text = self.driver.execute_script(
                 "return document.body.innerText"
