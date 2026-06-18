@@ -12,7 +12,7 @@ class LoginPage(BasePage):
     FORGOT_PWD_LINK = (By.LINK_TEXT, "Forgot your password?")
     SIGNUP_LINK     = (By.CSS_SELECTOR, "a[href='/account/register']")
 
-    # ul.errors     — default_errors filter output (Timber, Debut, Minimal, Vintage)
+    # ul.errors      — default_errors filter output (Timber, Debut, Minimal, Vintage)
     # .form__message — Dawn / OS 2.0 themes
     # .notice--error — some custom themes
     ERROR_MESSAGE = (By.CSS_SELECTOR,
@@ -27,10 +27,11 @@ class LoginPage(BasePage):
         "form[action*='/account/login'] button[type='submit']"
     )
 
-    # Shopify's bot-detection CAPTCHA. The puzzle has a "Skip" button that
-    # bypasses the challenge and lets the form result through.
-    CAPTCHA_OVERLAY = (By.XPATH, "//*[contains(text(), 'drag the icon')]")
-    CAPTCHA_SKIP    = (By.XPATH, "//button[normalize-space(text())='Skip']")
+    # Shopify's bot-detection CAPTCHA rotates between challenge types:
+    # "drag the icon to the place where it fits", "click the shape that is
+    # not like the others", etc. Detecting by challenge text breaks on every
+    # rotation. The Skip button is present in every variant — use that instead.
+    CAPTCHA_SKIP = (By.XPATH, "//button[normalize-space(text())='Skip']")
 
     def open(self):
         return super().open("/account/login")
@@ -46,15 +47,13 @@ class LoginPage(BasePage):
 
     def _dismiss_captcha_if_present(self):
         """
-        Shopify shows a drag-and-drop CAPTCHA when it suspects a bot.
-        The challenge includes a "Skip" button — clicking it lets the
-        original form request proceed so the login error is rendered normally.
-        Uses a short timeout (3s) so it doesn't slow down the happy path.
+        Shopify shows a rotating CAPTCHA challenge when it suspects a bot.
+        The challenge text changes between runs so we detect by the Skip
+        button, which is present in every variant. Clicking Skip lets the
+        original form result (the login error) load normally.
+        Uses a 3s timeout so it adds no delay when no CAPTCHA is present.
         """
         try:
-            WebDriverWait(self.driver, 3).until(
-                EC.presence_of_element_located(self.CAPTCHA_OVERLAY)
-            )
             skip = WebDriverWait(self.driver, 3).until(
                 EC.element_to_be_clickable(self.CAPTCHA_SKIP)
             )
@@ -68,7 +67,6 @@ class LoginPage(BasePage):
         self.enter_password(password)
         self.click_submit()
         self.wait_for_page_load()
-        # Dismiss bot-detection CAPTCHA if Shopify triggered it.
         self._dismiss_captcha_if_present()
 
     def is_email_field_present(self) -> bool:
