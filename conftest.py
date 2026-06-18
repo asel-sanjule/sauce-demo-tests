@@ -1,3 +1,4 @@
+import os
 import pytest
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -20,13 +21,35 @@ def build_driver() -> webdriver.Chrome:
     options.add_argument("--window-size=1920,1080")
     options.add_argument("--disable-extensions")
 
-    # Selenium Manager resolves ChromeDriver automatically — no Service() path needed.
     return webdriver.Chrome(options=options)
 
 
+# ── Screenshot on failure ────────────────────────────────────────────────────
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """
+    Save a screenshot whenever a test fails.
+    Files land in screenshots/ and are uploaded as a CI artifact so you can
+    see exactly what the browser was showing when the assertion failed.
+    """
+    outcome = yield
+    rep = outcome.get_result()
+    if rep.when == "call" and rep.failed:
+        driver = item.funcargs.get("driver")
+        if driver:
+            os.makedirs("screenshots", exist_ok=True)
+            safe_name = (
+                rep.nodeid
+                .replace("/", "_")
+                .replace("::", "_")
+                .replace("[", "_")
+                .replace("]", "_")
+            )
+            driver.save_screenshot(f"screenshots/{safe_name}.png")
+
+
 # ── Core driver fixture ──────────────────────────────────────────────────────
-# scope="function" means a fresh browser is spun up for every test.
-# This is the same as Playwright's default behaviour — no shared state between tests.
 
 @pytest.fixture(scope="function")
 def driver():
@@ -43,8 +66,6 @@ def driver():
 
 
 # ── Pre-navigated convenience fixtures ──────────────────────────────────────
-# These are exactly like Playwright's fixtures that accept a `page` argument
-# and call page.goto() before the test body runs.
 
 @pytest.fixture
 def home_driver(driver):

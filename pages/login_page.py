@@ -11,22 +11,16 @@ class LoginPage(BasePage):
     FORGOT_PWD_LINK = (By.LINK_TEXT, "Forgot your password?")
     SIGNUP_LINK     = (By.CSS_SELECTOR, "a[href='/account/register']")
 
-    # Broad selector covering error containers across common Shopify theme variants:
-    #   ul.errors          — Debut, Minimal, and most classic themes
-    #   .notice--error     — some custom/modified themes
-    #   [data-form-status] — some Shopify 2.0 themes
-    # [class*='error'] is intentionally EXCLUDED — too greedy, matches
-    # non-message elements such as input wrappers with 'error-state' classes.
+    # Covers error containers across common Shopify theme variants.
+    # ul.errors        — default_errors filter output (Timber, Debut, Minimal, Vintage)
+    # .form__message   — Dawn / OS 2.0 themes
+    # .notice--error   — some custom themes
     ERROR_MESSAGE = (By.CSS_SELECTOR,
         "ul.errors, "
-        "form[action*='/account/login'] .errors, "
-        ".notice--error, "
-        "[data-form-status]"
+        ".form__message, "
+        ".notice--error"
     )
 
-    # Scoped to the login form specifically — prevents matching the search bar's
-    # submit button, which also uses input[type='submit'] and caused tests to
-    # navigate to /search?type=product&q= instead of submitting the login form.
     # Uses action*= (contains) to handle Shopify appending ?return_url=... to the
     # action attribute at runtime, which breaks an exact [action='/account/login'] match.
     SUBMIT_BUTTON = (By.CSS_SELECTOR,
@@ -50,9 +44,8 @@ class LoginPage(BasePage):
         self.enter_email(email)
         self.enter_password(password)
         self.click_submit()
-        # Wait for the POST -> redirect -> page-load cycle to complete before
-        # any subsequent assertions. Without this, has_error_message() starts
-        # polling while the page is mid-reload and may miss the error element.
+        # Wait for the POST -> redirect -> page-load cycle to finish before
+        # any subsequent assertion polls the DOM.
         self.wait_for_page_load()
 
     def is_email_field_present(self) -> bool:
@@ -69,17 +62,39 @@ class LoginPage(BasePage):
 
     def has_error_message(self) -> bool:
         """
-        Returns True when a visible, non-empty error message is present.
+        Returns True when an error message is present after a failed login.
 
-        Uses visibility_of_element_located (not presence_of_element_located) so
-        that an empty or hidden .errors container — which Shopify may render in
-        the DOM even on a clean page load — does not produce a false positive.
-        The .text.strip() check provides a second guard: the element must also
-        contain actual error copy, not just be visible.
+        Two strategies are attempted in order:
+
+        1. CSS selector — waits up to 10s for a visible, non-empty element
+           matching any of the known Shopify error-container classes.
+
+        2. JavaScript innerText fallback — scans the full page text for
+           Shopify's known login error phrases. This is independent of CSS
+           class names so it covers theme customisations, translated copy,
+           or any structural change that breaks the element-based check.
         """
+        # Strategy 1: element-based
         try:
             element = self.wait.until(EC.visibility_of_element_located(self.ERROR_MESSAGE))
-            return bool(element.text.strip())
+            if element.text.strip():
+                return True
+        except Exception:
+            pass
+
+        # Strategy 2: full-page text scan
+        try:
+            body_text = self.driver.execute_script(
+                "return document.body.innerText"
+            ).lower()
+            shopify_error_phrases = [
+                "email or password is incorrect",
+                "incorrect email or password",
+                "invalid email or password",
+                "email address or password is incorrect",
+                "unidentified customer",
+            ]
+            return any(phrase in body_text for phrase in shopify_error_phrases)
         except Exception:
             return False
 

@@ -43,10 +43,18 @@ jobs:
       - name: Run full regression suite
         run: pytest -v --html=reports/regression-report.html --self-contained-html
 
-      - name: Upload test report
+      - name: Upload test reports
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: test-reports
           path: reports/
           retention-days: 14
+
+      - name: Upload failure screenshots
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: failure-screenshots
+          path: screenshots/
+          retention-days: 7
