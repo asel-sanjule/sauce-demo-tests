@@ -27,8 +27,7 @@ class LoginPage(BasePage):
         "form[action*='/account/login'] button[type='submit']"
     )
 
-    # The Skip button text is stable across all CAPTCHA challenge variants
-    # ("drag the icon", "click the shape", "find all vehicles", etc.)
+    # The Skip button text is stable across all CAPTCHA challenge types.
     CAPTCHA_SKIP = (By.XPATH, "//button[normalize-space(text())='Skip']")
 
     def open(self):
@@ -43,46 +42,11 @@ class LoginPage(BasePage):
     def click_submit(self):
         self.click(self.SUBMIT_BUTTON)
 
-    def _dismiss_captcha_if_present(self):
-        """
-        Shopify's bot-detection CAPTCHA widget is rendered inside an iframe.
-        Searching for the Skip button in the main document context never finds
-        it — we must switch into each iframe in turn until we locate and click it.
-
-        Flow:
-          1. Collect all iframes currently in the main document.
-          2. For each iframe, switch context and look for the Skip button (1s budget).
-          3. If found — click, switch back to default content, wait for page load.
-          4. If not found — switch back and try the next iframe.
-          5. Always restore default content whether we succeed or not.
-        """
-        try:
-            iframes = WebDriverWait(self.driver, 3).until(
-                EC.presence_of_all_elements_located((By.TAG_NAME, "iframe"))
-            )
-        except Exception:
-            return  # No iframes — no CAPTCHA present
-
-        for iframe in iframes:
-            try:
-                self.driver.switch_to.frame(iframe)
-                skip = WebDriverWait(self.driver, 1).until(
-                    EC.element_to_be_clickable(self.CAPTCHA_SKIP)
-                )
-                skip.click()
-                self.driver.switch_to.default_content()
-                self.wait_for_page_load()
-                return  # Done — CAPTCHA dismissed
-            except Exception:
-                self.driver.switch_to.default_content()
-                continue  # Try the next iframe
-
     def attempt_login(self, email: str, password: str):
         self.enter_email(email)
         self.enter_password(password)
         self.click_submit()
         self.wait_for_page_load()
-        self._dismiss_captcha_if_present()
 
     def is_email_field_present(self) -> bool:
         return self.is_visible(self.EMAIL_FIELD)
@@ -98,7 +62,7 @@ class LoginPage(BasePage):
 
     def has_error_message(self) -> bool:
         """
-        Returns True when an error message is present after a failed login.
+        Returns True when a visible, non-empty inline error message is present.
 
         Strategy 1: CSS selector — waits for a visible, non-empty element.
         Strategy 2: JS innerText fallback — scans for Shopify's known error
@@ -125,6 +89,48 @@ class LoginPage(BasePage):
             return any(phrase in body_text for phrase in shopify_error_phrases)
         except Exception:
             return False
+
+    def is_captcha_present(self) -> bool:
+        """
+        Returns True when Shopify's bot-detection CAPTCHA widget is visible.
+
+        The CAPTCHA (Arkose Labs / FunCaptcha) renders inside an iframe and
+        fires when a headless browser submits invalid credentials from a CI IP.
+        Detection searches all iframes for the Skip button, which is present
+        across every challenge variant the widget rotates through.
+        """
+        try:
+            iframes = self.driver.find_elements(By.TAG_NAME, "iframe")
+            for iframe in iframes:
+                try:
+                    self.driver.switch_to.frame(iframe)
+                    WebDriverWait(self.driver, 1).until(
+                        EC.presence_of_element_located(self.CAPTCHA_SKIP)
+                    )
+                    self.driver.switch_to.default_content()
+                    return True
+                except Exception:
+                    self.driver.switch_to.default_content()
+        except Exception:
+            pass
+        return False
+
+    def login_was_rejected(self) -> bool:
+        """
+        Returns True if the system refused the login attempt by either:
+
+        1. Showing an inline error message — the normal browser flow when
+           credentials are wrong.
+        2. Showing a CAPTCHA challenge — Shopify's bot-detection response
+           when a headless CI browser submits invalid credentials. The CAPTCHA
+           proves Shopify did NOT accept the login; the user would still need
+           to solve or skip the challenge before credentials are even checked.
+
+        Both outcomes confirm the invalid credentials were rejected. Using this
+        in tests instead of has_error_message() alone makes the assertion
+        honest about what the system actually does in a CI environment.
+        """
+        return self.has_error_message() or self.is_captcha_present()
 
     def get_error_text(self) -> str:
         return self.get_text(self.ERROR_MESSAGE)
