@@ -38,7 +38,16 @@ def pytest_runtest_makereport(item, call):
     outcome = yield
     rep = outcome.get_result()
     if rep.when == "call" and rep.failed:
-        driver = item.funcargs.get("driver")
+        # The test may request a pre-navigated convenience fixture (login_driver,
+        # home_driver, etc.) rather than the raw driver. Try each name so the
+        # hook works regardless of which fixture the test declared.
+        driver = None
+        for name in ("driver", "login_driver", "home_driver", "catalog_driver", "cart_driver"):
+            candidate = item.funcargs.get(name)
+            if candidate is not None:
+                driver = candidate
+                break
+
         if driver:
             os.makedirs("screenshots", exist_ok=True)
             safe_name = (
