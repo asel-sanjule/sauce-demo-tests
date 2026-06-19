@@ -5,7 +5,7 @@
 ![Selenium](https://img.shields.io/badge/Selenium-4.18-green?logo=selenium)
 ![Pytest](https://img.shields.io/badge/Pytest-8.1-orange)
 
-End-to-end regression suite for [sauce-demo.myshopify.com](https://sauce-demo.myshopify.com) — a Shopify demo storefront.  
+End-to-end regression suite for [sauce-demo.myshopify.com](https://sauce-demo.myshopify.com) — a Shopify demo storefront.
 Built with **Python**, **Selenium WebDriver**, and **Pytest**, integrated into a **GitHub Actions CI pipeline**.
 
 ---
@@ -101,14 +101,14 @@ pytest tests/test_catalog.py -v
 pytest tests/test_catalog.py::TestCatalog::test_catalog_displays_all_seven_products
 ```
 
-> **Headless by default.** To run with a visible browser, remove `--headless`  
+> **Headless by default.** To run with a visible browser, remove `--headless`
 > from `build_driver()` in `conftest.py`.
 
 ---
 
 ## HTML Report
 
-Every run generates `reports/regression-report.html`.  
+Every run generates `reports/regression-report.html`.
 In CI, the report is uploaded as a downloadable artifact under **Actions → Run → Artifacts**.
 
 ---

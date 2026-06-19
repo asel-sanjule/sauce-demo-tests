@@ -1,0 +1,37 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      # Catches TabError before Python even runs the file
+      - id: check-ast
+        name: "Check Python syntax (AST parse)"
+
+      # Prevents mixed tabs/spaces from ever being committed
+      - id: mixed-line-ending
+        name: "Normalize line endings"
+        args: [--fix=lf]
+
+      # Cleans up stray trailing whitespace
+      - id: trailing-whitespace
+        name: "Remove trailing whitespace"
+
+      # Ensures every file ends with a newline
+      - id: end-of-file-fixer
+        name: "Fix missing end-of-file newline"
+
+      # Catches accidentally committed debug artifacts
+      - id: debug-statements
+        name: "Check for debug statements (pdb, breakpoint)"
+
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.0.0
+    hooks:
+      - id: flake8
+        name: "Flake8 lint (indentation + style)"
+        # IMPORTANT: quote args that contain commas — unquoted commas are YAML
+        # list separators and will split "--select=E1,W191" into three separate
+        # broken arguments, causing flake8 to reject every filename as unknown.
+        # E1xx = all indentation errors (mixed indent, wrong level, etc.)
+        # W191 = indentation contains tabs (the exact error that broke CI)
+        args: ["--select=E1,W191", "--max-line-length=120"]
+        files: ^(tests|pages|conftest).*\.py$

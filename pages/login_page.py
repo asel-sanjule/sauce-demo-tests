@@ -15,14 +15,16 @@ class LoginPage(BasePage):
     # ul.errors      — default_errors filter output (Timber, Debut, Minimal, Vintage)
     # .form__message — Dawn / OS 2.0 themes
     # .notice--error — some custom themes
-    ERROR_MESSAGE = (By.CSS_SELECTOR,
+    ERROR_MESSAGE = (
+        By.CSS_SELECTOR,
         "ul.errors, "
         ".form__message, "
         ".notice--error"
     )
 
     # action*= (contains) handles Shopify appending ?return_url=... at runtime.
-    SUBMIT_BUTTON = (By.CSS_SELECTOR,
+    SUBMIT_BUTTON = (
+        By.CSS_SELECTOR,
         "form[action*='/account/login'] input[type='submit'], "
         "form[action*='/account/login'] button[type='submit']"
     )
